@@ -1,0 +1,159 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+def head_angle():
+    position = pd.read_csv('Position_formation.csv')
+
+    head_center_x = position['head_center_x']
+    head_center_y = position['head_center_y']
+    nose_x = position['nose_x']
+    nose_y = position['nose_y']
+    bodyparts_coord = position['bodyparts_coord']
+
+    for i in bodyparts_coord:
+        delta_x = nose_x - head_center_x
+        delta_y = nose_y - head_center_y
+
+        angles_rad = np.arctan2(delta_y, delta_x)
+        angles_deg = np.degrees(angles_rad)
+        position['angles_deg'] = angles_deg
+
+    #assume body part coordinates represnt the time in seconds when a movement occured
+    position['time_sec'] = bodyparts_coord
+
+
+    plt.figure(figsize=(10, 6), dpi=300)
+    plt.plot(position['time_sec'], position['angles_deg'], label='Head Angle (degrees)', color='blue', linewidth=0.2)
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Head angle relative to x direction (Degrees)')
+    plt.title('Head Angle Over Time')
+
+    return (position)
+
+
+def range_calculation():
+    sound = pd.read_csv('SoundTimeData.csv')
+    time_on = sound['Time']
+
+    if len(time_on) > 2:
+        time_differences = [time_on[i] - time_on[i - 1] for i in range(1, len(time_on))]
+        std_dev = np.std(time_differences)
+        threshold = 1
+
+        sound_on_ranges = []
+        current_range = [time_on[0]]
+
+        for i in range(1, len(time_on)):
+            if time_on[i] - current_range[-1] > threshold:
+                sound_on_ranges.append((current_range[0], current_range[-1]))
+                current_range = [time_on[i]]
+            else:
+                current_range.append(time_on[i])
+
+        if current_range:
+            sound_on_ranges.append((current_range[0], current_range[-1]))
+
+        print("Sound On Ranges:")
+        for idx, (start, end) in enumerate(sound_on_ranges):
+            print(f"Range {idx + 1}: Start={start}, End={end}")
+
+
+
+    return sound_on_ranges
+
+
+def mean_angle(sound_on_ranges, bodyparts_coord, position):
+    matches = bodyparts_coord[bodyparts_coord.isin(sound_on_ranges)]
+    angles_on = position[position['time_sec'].isin(matches)]['angles_deg']
+    mean_angles_on = angles_on.mean()
+    print("Time on mean angle:",mean_angles_on)
+    angles_off = position[~position['time_sec'].isin(matches)]['angles_deg']
+    mean_angles_off = angles_off.mean()
+    print("Time off mean angle:", mean_angles_off)
+
+    return mean_angles_on
+
+
+def plot(angles_in_ranges, angles_outside_ranges):
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.hist(angles_in_ranges, bins=20, density=True, color='blue', alpha=0.7)
+    plt.ylim(0, 0.007)
+    plt.title('Normalised Histogram of Head Angles When Sound On')
+    plt.xlabel('Angles (degrees)')
+    plt.ylabel('Frequency')
+
+    plt.subplot(1, 2, 2)
+    plt.hist(angles_outside_ranges, bins=20, density=True, color='green', alpha=0.7)
+    plt.ylim(0, 0.007)
+    plt.title('Normalised Histogram of Head Angles When Sound Off')
+    plt.xlabel('Angles (degrees)')
+    plt.ylabel('Frequency')
+
+    plt.tight_layout()
+    plt.show()
+
+
+    plt.figure(figsize=(10, 6))
+    plt.subplot(1, 2, 1)
+    plt.boxplot(angles_in_ranges)
+    plt.title('Boxplot of Head Angles When Sound on')
+    plt.ylabel('Angles (degrees)')
+
+    plt.subplot(1, 2, 2)
+    plt.boxplot(angles_outside_ranges)
+    plt.title('Boxplot of Head Angles When Sound off')
+    plt.ylabel('Angles (degrees)')
+
+    plt.tight_layout()
+    plt.show()
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot violin plot for angles_in_ranges
+    plt.subplot(1, 2, 1)
+    plt.violinplot(angles_in_ranges, showmeans=False, showmedians=True)
+    plt.title('Violin Plot of Angles Inside Ranges')
+    plt.xlabel('Dataset')
+    plt.ylabel('Angles (degrees)')
+
+    # Plot violin plot for angles_outside_ranges
+    plt.subplot(1, 2, 2)
+    plt.violinplot(angles_outside_ranges, showmeans=False, showmedians=True)
+    plt.title('Violin Plot of Angles Outside Ranges')
+    plt.xlabel('Dataset')
+    plt.ylabel('Angles (degrees)')
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+def main():
+    position = head_angle()
+    sound_on_ranges = range_calculation()
+    bodyparts_coord = position['time_sec']
+
+    angles_in_ranges = []
+    angles_outside_ranges = []
+
+    for start, end in sound_on_ranges:
+        mask = (bodyparts_coord >= start) & (bodyparts_coord <= end)
+        matches = bodyparts_coord[mask]
+        angles = position[position['time_sec'].isin(matches)]['angles_deg']
+        angles_in_ranges.extend(angles)
+
+    matches_outside = bodyparts_coord[~bodyparts_coord.isin(np.concatenate(sound_on_ranges))]
+    angles_outside = position[position['time_sec'].isin(matches_outside)]['angles_deg']
+    angles_outside_ranges.extend(angles_outside)
+
+    plot(angles_in_ranges, angles_outside_ranges)
+
+
+if __name__ == "__main__":
+    main()
+
+
+
